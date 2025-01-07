@@ -51,11 +51,11 @@ if __name__ == "__main__":
         sorted_input_paths = sorted(input_paths, key=extract_number)
 
         # 기존 infer 폴더에 필요한 디렉토리 생성
-        if not os.path.exists(f"/content/drive/MyDrive/infer/{voice_model}"):
-            os.mkdir(f"/content/drive/MyDrive/infer/{voice_model}")
-        infer_song_folder = f"/content/drive/MyDrive/infer/{voice_model}/[{pitch_value}]{song_title}"
-        if not os.path.exists(infer_song_folder):
-            os.mkdir(infer_song_folder)
+        # if not os.path.exists(f"/content/drive/MyDrive/infer/{voice_model}"):
+        #     os.mkdir(f"/content/drive/MyDrive/infer/{voice_model}")
+        # infer_song_folder = f"/content/drive/MyDrive/infer/{voice_model}/[{pitch_value}]{song_title}"
+        # if not os.path.exists(infer_song_folder):
+        #     os.mkdir(infer_song_folder)
 
         # 다운로드 폴더 내에 해당 폴더 생성
         download_song_folder = os.path.join(download_base_path, voice_model, f'[{pitch_value}]{song_title}')
@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
         for input_path in sorted_input_paths:
             file_name = os.path.basename(input_path)
-            output_path = os.path.join(infer_song_folder, f"{file_name}.mp3")
+            output_path = os.path.join(download_song_folder, f"{file_name}.mp3")
             voice_change(
                 voice_model,
                 input_path,
@@ -82,14 +82,14 @@ if __name__ == "__main__":
             # 피치 조정이 필요한 경우
             if pitch_value != 0:
                 mr_input_path = os.path.dirname(input_path)
-                mr_output_path = os.path.join(infer_song_folder, 'mr')
+                mr_output_path = os.path.join(download_song_folder, 'mr')
                 process_mp3_files(
                     mr_input_path, mr_output_path, pitch_value, ['_mr.mp3', '_corus.mp3']
                 )
             else:
                 # 피치 변경이 필요 없을 경우 mr 및 corus 파일을 복사
                 mr_input_path = os.path.dirname(input_path)
-                mr_output_path = os.path.join(infer_song_folder, 'mr')
+                mr_output_path = os.path.join(download_song_folder, 'mr')
                 if not os.path.exists(mr_output_path):
                     os.makedirs(mr_output_path)
                 for filename in os.listdir(mr_input_path):
@@ -105,7 +105,7 @@ if __name__ == "__main__":
             shutil.copy(output_path, dst_output_path)
 
             # mr 및 corus 파일 복사
-            mr_output_path = os.path.join(infer_song_folder, 'mr')
+            mr_output_path = os.path.join(download_song_folder, 'mr')
             if os.path.exists(mr_output_path):
                 dst_mr_output_path = os.path.join(download_song_folder, 'mr')
                 if not os.path.exists(dst_mr_output_path):
