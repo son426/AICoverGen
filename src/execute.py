@@ -30,6 +30,10 @@ def process_mp3_files(input_directory, output_directory, semitones, file_endings
             change_pitch_sox(input_filepath, output_filepath, semitones)
             print(f"{filename}의 피치가 {semitones} 반음만큼 변경되었습니다.")
 
+# song_title에서 실제 곡 제목만 추출하는 함수 추가
+def get_song_name(full_path):
+    return os.path.basename(full_path)
+
 if __name__ == "__main__":
     song_datas_str = sys.argv[1]  # 첫 번째 인자
     song_datas = json.loads(song_datas_str)
@@ -42,23 +46,24 @@ if __name__ == "__main__":
         os.makedirs(download_base_path)
 
     for song_data in song_datas:
-        song_title = song_data["song_title"]
+        full_song_title = song_data["song_title"]  # 전체 경로
+        song_title = get_song_name(full_song_title)  # 실제 곡 제목만 추출
         voice_model = song_data["voice_model"]
         pitch_value = song_data["pitch_value"]
         isMan = song_data["isMan"]
 
-        input_paths = find_full_path(song_title, isMan)
+        input_paths = find_full_path(full_song_title, isMan)  # 전체 경로 사용
         sorted_input_paths = sorted(input_paths, key=extract_number)
 
         # 기존 infer 폴더에 필요한 디렉토리 생성
         if not os.path.exists(f"/content/drive/MyDrive/infer/{voice_model}"):
             os.mkdir(f"/content/drive/MyDrive/infer/{voice_model}")
-        infer_song_folder = f"/content/drive/MyDrive/infer/{voice_model}/[{pitch_value}]{song_title}"
+        infer_song_folder = f"/content/drive/MyDrive/infer/{voice_model}/[{pitch_value}]{song_title}"  # 곡 제목만 사용
         if not os.path.exists(infer_song_folder):
             os.mkdir(infer_song_folder)
 
         # 다운로드 폴더 내에 해당 폴더 생성
-        download_song_folder = os.path.join(download_base_path, voice_model, f'[{pitch_value}]{song_title}')
+        download_song_folder = os.path.join(download_base_path, voice_model, f'[{pitch_value}]{song_title}')  # 곡 제목만 사용
         if not os.path.exists(download_song_folder):
             os.makedirs(download_song_folder)
 
