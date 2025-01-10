@@ -27,41 +27,37 @@ def initialize_firebase():
 
 def apply_reverb(input_path, output_path):
     """간단한 리버브 효과를 적용"""
-    from scipy.signal import fftconvolve
-    import soundfile as sf
+    from pedalboard import Pedalboard, Reverb
+    from pedalboard.io import AudioFile
     
     print(f"[REVERB] Applying reverb to {input_path}")
     
     try:
         # 오디오 파일 로드
-        audio, sr = sf.read(input_path)
+        with AudioFile(input_path) as f:
+            # 전체 프레임 수 확인
+            audio = f.read(f.frames)
+            samplerate = f.samplerate
+            num_channels = f.num_channels
+
         
-        # 스테레오로 변환
-        if len(audio.shape) == 1:
-            audio = np.column_stack((audio, audio))
-        
-        # 리버브 파라미터
-        delay_samples = int(0.1 * sr)  # 100ms delay
-        decay = 0.6  # 감쇠율
-        
-        # 임펄스 응답 생성
-        impulse = np.zeros(delay_samples)
-        impulse[0] = 1
-        impulse[delay_samples//4] = 0.5
-        impulse[delay_samples//2] = 0.25
-        impulse[3*delay_samples//4] = 0.125
-        
-        # 각 채널에 대해 리버브 적용
-        reverbed_left = fftconvolve(audio[:, 0], impulse, mode='same')
-        reverbed_right = fftconvolve(audio[:, 1], impulse, mode='same')
-        
-        # 원본과 리버브 믹스
-        mixed_left = 0.7 * audio[:, 0] + 0.3 * reverbed_left
-        mixed_right = 0.7 * audio[:, 1] + 0.3 * reverbed_right
-        
+        # pedalboard 설정
+        board = Pedalboard([
+            Reverb(
+                room_size=0.3,
+                damping=0.4,
+                wet_level=0.2,
+                dry_level=0.8,
+                width=0.5
+            )
+        ])
+
+        # 리버브 적용
+        effected = board(audio, samplerate)
+
         # 결과 저장
-        result = np.column_stack((mixed_left, mixed_right))
-        sf.write(output_path, result, sr, format='mp3')
+        with AudioFile(output_path, 'w', samplerate, num_channels) as f:
+            f.write(effected)
         
         print(f"[REVERB] Successfully applied reverb to {output_path}")
         return output_path
