@@ -114,15 +114,18 @@ def upload_to_storage(file_path, destination_path):
         print(f"[ERROR] Upload failed: {str(e)}")
         return None
 
-def process_song_request(song_request_id, audio_pair_list):
+def process_song_request(song_request_id, audio_pair_list, pitch_value):
     """API 호출"""
     url = "https://asia-northeast3-homebrew-prod.cloudfunctions.net/processSongRequest"
     payload = {
         "songRequestId": song_request_id,
-        "audioPairList": audio_pair_list
+        "audioPairList": audio_pair_list,
+        "pitch": pitch_value
+
     }
     print(f"\n[API] Making request for song {song_request_id}")
     print(f"[API] Audio pairs: {json.dumps(audio_pair_list, indent=2)}")
+    print(f"[API] Pitch value: {pitch_value}")
     return requests.post(url, json=payload)
 
 def extract_number(file_path):
@@ -160,6 +163,32 @@ def process_mr_files(input_directory, output_directory, semitones, base_name):
 
 def get_song_name(full_path):
     return os.path.basename(full_path)
+
+
+def sanitize_filename(original_name, idx):
+    """
+    원본 파일명에서 핵심 정보는 유지하되 문제되는 특수문자 제거
+    예: '[4K⧸최초공개] 정승환 (Jung Seung Hwan) - 바람이 분다 l @JTBC K-909 221119 방송' 
+    -> 'guide_1_정승환_바람이_분다'
+    """
+    # 1. 기본적인 특수문자 및 괄호 제거
+    name = re.sub(r'[\[\]\(\)⧸\@\|\-\_\.]', ' ', original_name)
+    
+    # 2. 불필요한 정보 제거 (예: 화질정보, 방송정보 등)
+    remove_patterns = [
+        r'\d+K',           # 화질 정보 (예: 4K)
+        r'최초공개',        # 부가 정보
+        r'JTBC.*방송',     # 방송 정보
+        r'\d{6}',         # 날짜 형식
+    ]
+    for pattern in remove_patterns:
+        name = re.sub(pattern, '', name)
+    
+    # 3. 연속된 공백 제거 및 언더스코어로 변경
+    name = re.sub(r'\s+', '_', name.strip())
+    
+    # 4. guide_{idx} 형식 추가
+    return f"guide_{idx}_{name}"
 
 if __name__ == "__main__":
     bucket = initialize_firebase()
@@ -240,8 +269,8 @@ if __name__ == "__main__":
             )
 
             # Storage 업로드를 위한 파일 복사
-            vocal_storage_path = f"release/covers/{current_datetime}/{voice_model}/{song_title}/pitch_{pitch_value}/guide_{idx}/{base_name}_vocal.mp3"
-            mr_storage_path = f"release/covers/{current_datetime}/{voice_model}/{song_title}/pitch_{pitch_value}/guide_{idx}/{base_name}_mr.mp3"
+            vocal_storage_path = f"release/covers/{current_datetime}/{voice_model}/{song_title}/pitch_{pitch_value}/guide_{idx}/{sanitize_filename(base_name, idx)}_vocal.mp3"
+            mr_storage_path = f"release/covers/{current_datetime}/{voice_model}/{song_title}/pitch_{pitch_value}/guide_{idx}/{sanitize_filename(base_name, idx)}_mr.mp3"
 
             # Storage 업로드
             vocal_url = upload_to_storage(reverb_output_path, vocal_storage_path)
@@ -259,7 +288,7 @@ if __name__ == "__main__":
                 print(f"[ERROR] MR file not found or processing failed")
 
         # API 호출
-        response = process_song_request(song_data["songRequestId"], audio_pairs)
+        response = process_song_request(song_data["songRequestId"], audio_pairs, song_data["pitch_value"])
         
         if response.status_code == 200:
             print(f"[API] Success: {song_data['songRequestId']}")
