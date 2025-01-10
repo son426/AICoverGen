@@ -7,6 +7,7 @@ import shutil
 from datetime import datetime
 import requests
 import firebase_admin
+import subprocess
 
 from firebase_admin import credentials, storage
 from pydub import AudioSegment
@@ -15,6 +16,184 @@ from pedalboard.io import AudioFile
 import numpy as np
 
 from main import voice_change, find_full_path
+
+
+# def normalize_to_lufs_pro(input_file, output_file, target_lufs=-14.0, target_tp=-1.0, target_lra=11.0):
+#     """
+#     2-Pass Loudnorm(FFmpeg)을 활용한 전문가 수준의 LUFS 정규화.
+#     한글/특수문자 경로 문제 해결을 위해 임시 디렉토리 활용
+#     """
+#     try:
+#         import uuid
+#         import shutil
+#         from pydub import AudioSegment
+#         import json
+#         import subprocess
+#         import os
+        
+#         # 0) 임시 디렉토리 설정
+#         temp_dir = "/tmp/audio_normalize"
+#         os.makedirs(temp_dir, exist_ok=True)
+#         temp_id = str(uuid.uuid4())[:8]
+        
+#         # 임시 파일 경로들 (모두 영문/숫자로만 구성)
+#         temp_input = os.path.join(temp_dir, f"input_{temp_id}.mp3")
+#         temp_wav_input = os.path.join(temp_dir, f"wav_input_{temp_id}.wav")
+#         temp_wav_pass2 = os.path.join(temp_dir, f"wav_pass2_{temp_id}.wav")
+#         temp_output = os.path.join(temp_dir, f"output_{temp_id}.mp3")
+        
+#         print(f"[NORMALIZE] Processing {input_file}")
+#         print(f"[NORMALIZE] Using temp directory: {temp_dir}")
+        
+#         # 1) 입력 파일을 임시 위치로 복사
+#         shutil.copy2(input_file, temp_input)
+        
+#         # 2) MP3를 WAV로 변환 (임시 파일)
+#         audio = AudioSegment.from_file(temp_input)
+#         audio.export(temp_wav_input, format='wav')
+        
+#         # 3) 1차 패스 - 오디오 분석
+#         pass1_cmd = [
+#             'ffmpeg', '-y',
+#             '-i', temp_wav_input,
+#             '-af', f"loudnorm=I={target_lufs}:TP={target_tp}:LRA={target_lra}:print_format=json",
+#             '-f', 'null', '-',
+#             '-loglevel', 'info'
+#         ]
+        
+#         pass1_result = subprocess.run(
+#             pass1_cmd,
+#             stderr=subprocess.PIPE,
+#             stdout=subprocess.PIPE,
+#             text=True,
+#             encoding='utf-8'
+#         )
+
+#         if pass1_result.returncode != 0:
+#             print(f"[DEBUG] FFmpeg pass1 stderr:\n{pass1_result.stderr}")
+#             raise subprocess.CalledProcessError(pass1_result.returncode, pass1_cmd)
+
+#         # JSON 파싱 로직
+#         stderr_lines = pass1_result.stderr.split('\n')
+#         json_str = None
+#         for line in stderr_lines:
+#             if '"input_i"' in line:  # 필수 키워드로 JSON 라인 식별
+#                 try:
+#                     start_idx = line.find('{')
+#                     end_idx = line.rfind('}') + 1
+#                     if start_idx != -1 and end_idx != -1:
+#                         json_str = line[start_idx:end_idx]
+#                         break
+#                 except:
+#                     continue
+
+#         if not json_str:
+#             print("[WARNING] JSON parsing failed, using default normalization values")
+#             measured_data = {
+#                 "input_i": -27.0,
+#                 "input_tp": -2.0,
+#                 "input_lra": 15.0,
+#                 "input_thresh": -38.0,
+#                 "target_offset": 0.0
+#             }
+#         else:
+#             try:
+#                 measured_data = json.loads(json_str)
+#                 print(f"[DEBUG] Parsed loudnorm data: {measured_data}")
+#             except json.JSONDecodeError as je:
+#                 print(f"[WARNING] JSON decode error: {je}, using default values")
+#                 measured_data = {
+#                     "input_i": -27.0,
+#                     "input_tp": -2.0,
+#                     "input_lra": 15.0,
+#                     "input_thresh": -38.0,
+#                     "target_offset": 0.0
+#                 }
+
+#         # 4) 2차 패스 - 정규화 적용
+#         loudnorm_filter = (
+#             f"loudnorm=I={target_lufs}:TP={target_tp}:LRA={target_lra}"
+#             f":measured_I={measured_data['input_i']}"
+#             f":measured_TP={measured_data['input_tp']}"
+#             f":measured_LRA={measured_data['input_lra']}"
+#             f":measured_thresh={measured_data['input_thresh']}"
+#             f":offset={measured_data['target_offset']}"
+#             ":linear=true:print_format=json"
+#         )
+
+#         pass2_cmd = [
+#             'ffmpeg', '-y',
+#             '-i', temp_wav_input,
+#             '-af', loudnorm_filter,
+#             '-ar', '48000',
+#             '-c:a', 'pcm_s24le',
+#             temp_wav_pass2
+#         ]
+        
+#         subprocess.run(pass2_cmd, check=True)
+
+#         # 5) 정규화된 WAV를 MP3로 변환
+#         final_audio = AudioSegment.from_wav(temp_wav_pass2)
+#         final_audio.export(temp_output, format='mp3', bitrate='320k')
+
+#         # 6) 최종 결과물을 목적 경로로 복사
+#         shutil.copy2(temp_output, output_file)
+
+#         # 7) 임시 파일들 정리
+#         temp_files = [temp_input, temp_wav_input, temp_wav_pass2, temp_output]
+#         for tmp in temp_files:
+#             try:
+#                 if os.path.exists(tmp):
+#                     os.remove(tmp)
+#             except Exception as e:
+#                 print(f"[WARNING] Failed to remove temp file {tmp}: {str(e)}")
+        
+#         print(f"[NORMALIZE] Successfully normalized to {target_lufs} LUFS: {output_file}")
+#         return True
+
+#     except Exception as e:
+#         print(f"[ERROR] During normalization: {str(e)}")
+#         print("[FALLBACK] Attempting simple normalization...")
+#         try:
+#             # 간단한 RMS 기반 정규화로 폴백
+#             audio = AudioSegment.from_file(input_file)
+#             target_dbfs = -14.0  # Approximately -14 LUFS
+#             change_in_dbfs = target_dbfs - audio.dBFS
+#             normalized_audio = audio.apply_gain(change_in_dbfs)
+#             normalized_audio.export(output_file, format='mp3', bitrate='320k')
+#             print("[FALLBACK] Simple normalization completed")
+#             return True
+#         except Exception as fallback_error:
+#             print(f"[ERROR] Fallback normalization also failed: {str(fallback_error)}")
+#             print("[FALLBACK] Copying original file as fallback...")
+#             try:
+#                 # 최후의 수단: 원본 파일 복사
+#                 shutil.copy2(input_file, output_file)
+#                 print("[FALLBACK] Original file copied as fallback")
+#                 return True
+#             except Exception as copy_error:
+#                 print(f"[FATAL] All normalization attempts failed: {str(copy_error)}")
+#                 return False
+
+
+def normalize_to_lufs_pro(input_file, output_file, target_lufs=-14.0, target_tp=-1.0, target_lra=11.0):
+    """
+    Bypass normalization - simply copy the input file to the output file
+    """
+    try:
+        import shutil
+        print(f"[NORMALIZE] Bypassing normalization for {input_file}")
+        
+        # Simply copy the input file to the output file
+        shutil.copy2(input_file, output_file)
+        
+        print(f"[NORMALIZE] File copied as-is: {output_file}")
+        return True
+
+    except Exception as e:
+        print(f"[ERROR] During file copy: {str(e)}")
+        return False
+
 
 def initialize_firebase():
     """Firebase Storage 초기화"""
@@ -121,7 +300,6 @@ def process_song_request(song_request_id, audio_pair_list, pitch_value):
         "songRequestId": song_request_id,
         "audioPairList": audio_pair_list,
         "pitch": pitch_value
-
     }
     print(f"\n[API] Making request for song {song_request_id}")
     print(f"[API] Audio pairs: {json.dumps(audio_pair_list, indent=2)}")
@@ -241,6 +419,12 @@ if __name__ == "__main__":
             reverb_output_path = os.path.join(infer_song_folder, f"{base_name}_vocal_reverb.mp3")
             apply_reverb(optimized_voice_path, reverb_output_path)
 
+            # LUFS 정규화 적용 (보컬)
+            normalized_vocal_path = os.path.join(infer_song_folder, f"{base_name}_vocal_normalized.mp3")
+            if not normalize_to_lufs_pro(reverb_output_path, normalized_vocal_path, target_lufs=-14.0, target_tp=-1.0, target_lra=11.0):
+                print("[ERROR] Vocal normalization failed, using non-normalized file")
+                normalized_vocal_path = reverb_output_path
+
             # MR 파일 처리
             mr_output_path = process_mr_files(
                 os.path.dirname(input_path),
@@ -249,12 +433,20 @@ if __name__ == "__main__":
                 base_name
             )
 
+            if mr_output_path and os.path.exists(mr_output_path):
+                # LUFS 정규화 적용 (MR)
+                normalized_mr_path = os.path.join(infer_song_folder, f"{base_name}_mr_normalized.mp3")
+                if not normalize_to_lufs_pro(mr_output_path, normalized_mr_path, target_lufs=-14.0, target_tp=-1.0, target_lra=11.0):
+                    print("[ERROR] MR normalization failed, using non-normalized file")
+                    normalized_mr_path = mr_output_path
+                mr_output_path = normalized_mr_path
+
             # Storage 업로드를 위한 파일 복사
             vocal_storage_path = f"release/covers/{current_datetime}/{voice_model}/{song_title}/pitch_{pitch_value}/guide_{idx}/{sanitize_filename(base_name, idx)}_vocal.mp3"
             mr_storage_path = f"release/covers/{current_datetime}/{voice_model}/{song_title}/pitch_{pitch_value}/guide_{idx}/{sanitize_filename(base_name, idx)}_mr.mp3"
 
             # Storage 업로드
-            vocal_url = upload_to_storage(reverb_output_path, vocal_storage_path)
+            vocal_url = upload_to_storage(normalized_vocal_path, vocal_storage_path)
             
             if mr_output_path and os.path.exists(mr_output_path):
                 mr_url = upload_to_storage(mr_output_path, mr_storage_path)
@@ -262,7 +454,8 @@ if __name__ == "__main__":
                 if vocal_url and mr_url:
                     audio_pairs.append({
                         "vocalUrl": vocal_url,
-                        "mrUrl": mr_url
+                        "mrUrl": mr_url,
+                        "pitch": pitch_value
                     })
                     print(f"[SUCCESS] Added pair {idx}")
             else:
