@@ -165,30 +165,11 @@ def get_song_name(full_path):
     return os.path.basename(full_path)
 
 
-def sanitize_filename(original_name, idx):
-    """
-    원본 파일명에서 핵심 정보는 유지하되 문제되는 특수문자 제거
-    예: '[4K⧸최초공개] 정승환 (Jung Seung Hwan) - 바람이 분다 l @JTBC K-909 221119 방송' 
-    -> 'guide_1_정승환_바람이_분다'
-    """
-    # 1. 기본적인 특수문자 및 괄호 제거
-    name = re.sub(r'[\[\]\(\)⧸\@\|\-\_\.]', ' ', original_name)
-    
-    # 2. 불필요한 정보 제거 (예: 화질정보, 방송정보 등)
-    remove_patterns = [
-        r'\d+K',           # 화질 정보 (예: 4K)
-        r'최초공개',        # 부가 정보
-        r'JTBC.*방송',     # 방송 정보
-        r'\d{6}',         # 날짜 형식
-    ]
-    for pattern in remove_patterns:
-        name = re.sub(pattern, '', name)
-    
-    # 3. 연속된 공백 제거 및 언더스코어로 변경
-    name = re.sub(r'\s+', '_', name.strip())
-    
-    # 4. guide_{idx} 형식 추가
-    return f"guide_{idx}_{name}"
+def sanitize_filename(base_name, idx):
+    """파일명 단순화"""
+    # 특수문자 제거하고 간단하게 변경
+    return f"guide_{idx}_vocal"
+
 
 if __name__ == "__main__":
     bucket = initialize_firebase()
