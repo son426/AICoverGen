@@ -10,7 +10,7 @@ import firebase_admin
 
 from firebase_admin import credentials, storage
 from pydub import AudioSegment
-from pedalboard import load_plugin
+from pedalboard import Pedalboard, Reverb, Delay, Chorus, Gain
 from pedalboard.io import AudioFile
 import numpy as np
 
@@ -26,37 +26,49 @@ def initialize_firebase():
     return storage.bucket()
 
 def apply_reverb(input_path, output_path):
-    """간단한 리버브 효과를 적용"""
-    from pedalboard import Pedalboard, Reverb
-    from pedalboard.io import AudioFile
-    
-    print(f"[REVERB] Applying reverb to {input_path}")
+    """TAL-Reverb-4 설정을 최대한 유사하게 구현한 리버브 적용"""
+    print(f"[REVERB] Applying TAL-style reverb to {input_path}")
     
     try:
         # 오디오 파일 로드
         with AudioFile(input_path) as f:
-            # 전체 프레임 수 확인
             audio = f.read(f.frames)
             samplerate = f.samplerate
-            num_channels = f.num_channels
+            
+            # 모노를 스테레오로 변환
+            if len(audio.shape) == 1:
+                audio = np.stack([audio, audio])
+            elif len(audio.shape) == 2 and audio.shape[0] == 1:
+                audio = np.stack([audio[0], audio[0]])
+            elif len(audio.shape) == 2 and audio.shape[1] == 1:
+                audio = np.stack([audio.T[0], audio.T[0]])
 
-        
-        # pedalboard 설정
+            print("Audio shape:", audio.shape)
+
+        # TAL-Reverb-4 설정을 매칭한 이펙트 체인
         board = Pedalboard([
+            # Pre-delay (TAL의 delay: 0.1000 s)
+            Delay(
+                delay_seconds=0.1,
+                feedback=0.0,  # 피드백 없음
+                mix=1.0       # 100% delay signal
+            ),
+            
+            # Main reverb (TAL의 주요 파라미터 매칭)
             Reverb(
-                room_size=0.3,
-                damping=0.4,
-                wet_level=0.2,
-                dry_level=0.8,
-                width=0.5
+                room_size=0.55,     # size=55.0
+                damping=0.2,        # damp=20.0
+                wet_level=0.35,     # wet=35.0
+                dry_level=1.0,      # dry=100.0
+                width=1.0,          # stereo=100.0
             )
         ])
 
-        # 리버브 적용
+        # 이펙트 체인 적용
         effected = board(audio, samplerate)
 
         # 결과 저장
-        with AudioFile(output_path, 'w', samplerate, num_channels) as f:
+        with AudioFile(output_path, 'w', samplerate, effected.shape[0]) as f:
             f.write(effected)
         
         print(f"[REVERB] Successfully applied reverb to {output_path}")
@@ -64,9 +76,7 @@ def apply_reverb(input_path, output_path):
         
     except Exception as e:
         print(f"[ERROR] Failed to apply reverb: {str(e)}")
-        # 리버브 적용 실패시 원본 파일 복사
-        shutil.copy(input_path, output_path)
-        return output_path
+        return input_path
 
 def convert_to_mp3(input_file, output_file):
     """wav/mp3 파일을 128kbps MP3로 변환"""
